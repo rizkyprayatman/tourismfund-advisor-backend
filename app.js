@@ -1,6 +1,7 @@
 const express = require('express');
 const app = express();
 const adminRoutes = require('./routes/adminRoutes');
+const unitRoutes = require('./routes/unitRoutes');
 
 require('dotenv').config();
 
@@ -8,6 +9,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/admin', adminRoutes);
+app.use('/api/units', unitRoutes);
 
 const PORT = process.env.PORT || 3000;
 
