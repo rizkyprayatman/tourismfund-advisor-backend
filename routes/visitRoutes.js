@@ -8,4 +8,10 @@ router.post('/register', upload("file").single('file'), visitController.register
 
 router.put('/:id', authenticateAdmin, visitController.updateVisit);
 
+router.put('/reject/:id', authenticateAdmin, visitController.rejectVisit);
+
+router.put('/finish/:id', authenticateAdmin, visitController.finishVisit);
+
+router.get('/all', authenticateAdmin, visitController.getAllVisits);
+
 module.exports = router;

@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const app = express();
 const adminRoutes = require('./routes/adminRoutes');
 const unitRoutes = require('./routes/unitRoutes');
@@ -8,6 +9,8 @@ require('dotenv').config();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use(cors());
 
 app.use('/api/admin', adminRoutes);
 app.use('/api/units', unitRoutes);

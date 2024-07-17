@@ -2,6 +2,7 @@ const { formatDateTime, formatDateTimeVisit } = require('../utils/formatDateTime
 const { Visit, Unit } = require('../models');
 const AWS = require('aws-sdk');
 const nodemailer = require('nodemailer');
+const { Op } = require('sequelize');
 
 AWS.config.update({
     accessKeyId: process.env.R2_ACCESS_KEY_ID,
@@ -248,8 +249,171 @@ const updateVisit = async (req, res) => {
     }
 };
 
+const getAllVisits = async (req, res) => {
+    try {
+        let { page, perPage, sort, order, search, status } = req.query;
+
+        page = page ? parseInt(page, 10) : 1;
+        perPage = perPage ? parseInt(perPage, 10) : 10;
+        sort = sort || 'createdAt';
+        order = order ? order.toUpperCase() : 'DESC';
+        search = search || '';
+        status = status || '';
+
+        const searchCondition = search
+            ? {
+                [Op.or]: [
+                    { nama: { [Op.iLike]: `%${search}%` } },
+                    { email: { [Op.iLike]: `%${search}%` } },
+                    { nomor_telepon: { [Op.iLike]: `%${search}%` } },
+                    { no_kunjungan: { [Op.iLike]: `%${search}%` } },
+                ],
+            }
+            : {};
+
+        const statusCondition = status ? { status: { [Op.eq]: status } } : {};
+
+        const condition = {
+            where: {
+                ...searchCondition,
+                ...statusCondition,
+            },
+            order: [[sort, order]],
+            limit: perPage,
+            offset: (page - 1) * perPage,
+            include: [
+                {
+                    model: Unit,
+                    as: 'unit',
+                },
+            ],
+        };
+
+        const { count, rows } = await Visit.findAndCountAll(condition);
+
+        const totalPages = Math.ceil(count / perPage);
+
+        res.status(200).json({
+            visits: rows,
+            pagination: {
+                lastPage: totalPages,
+                order,
+                page,
+                perPage,
+                search,
+                sort,
+                total: count,
+            },
+        });
+    } catch (error) {
+        console.error('Error saat mengambil data kunjungan:', error);
+        res.status(500).json({ message: 'Gagal mengambil data kunjungan.' });
+    }
+};
+
+const rejectVisit = async (req, res) => {
+    try {
+        const visitId = req.params.id;
+        const { alasan } = req.body;
+
+        const visit = await Visit.findByPk(visitId);
+
+        if (!visit) {
+            return res.status(404).json({ message: 'Kunjungan tidak ditemukan.' });
+        }
+
+        visit.status = 'rejected';
+        visit.alasan_penolakan = alasan;
+
+        await visit.save();
+
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: visit.email,
+            subject: `${visit.nama}, Kunjungan Anda Telah Ditolak`,
+            html: `
+            <div class="container" style="max-width: 90%; margin: auto; padding-top: 20px;">
+                <h4>Hai <strong>${visit.nama}</strong>,</h4>
+                <p style="margin-top: 10px;">
+                    Pendaftaran kunjungan Anda dengan No Pendaftaran <strong>${visit.no_kunjungan}</strong> telah ditolak.
+                </p>
+                <p>
+                    Alasan penolakan: <strong>${alasan}</strong>
+                </p>
+                <p>
+                    Jika Anda merasa tidak pernah mendaftar pada platform ini, abaikan email ini.
+                </p>
+                <h4>Terima Kasih</h4>
+                <div style="text-align: center; background-color: #0000ff; padding: 10px 0;">
+                    <h1 style="color: white;">Butuh Bantuan?</h1>
+                    <p style="color: white;">Silakan hubungi kami melalui <a style="color: white;" href="mailto:kdak@gmail.com">kdak@gmail.com</a></p>
+                </div>
+            </div>
+            `,
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        res.status(200).json({ message: 'Kunjungan telah ditolak.' });
+    } catch (error) {
+        console.error('Error saat menolak kunjungan:', error);
+        res.status(500).json({ message: 'Gagal menolak kunjungan.' });
+    }
+};
+
+const finishVisit = async (req, res) => {
+    try {
+        const visitId = req.params.id;
+
+        const visit = await Visit.findByPk(visitId);
+
+        if (!visit) {
+            return res.status(404).json({ message: 'Kunjungan tidak ditemukan.' });
+        }
+
+        visit.status = 'finish';
+
+        await visit.save();
+
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: visit.email,
+            subject: `${visit.nama}, Kunjungan Anda Telah Selesai`,
+            html: `
+            <div class="container" style="max-width: 90%; margin: auto; padding-top: 20px;">
+                <h4>Hai <strong>${visit.nama}</strong>,</h4>
+                <p style="margin-top: 10px;">
+                    Kunjungan Anda dengan No Pendaftaran <strong>${visit.no_kunjungan}</strong> telah selesai.
+                </p>
+                <p>
+                    Terima kasih telah berkunjung.
+                </p>
+                <p>
+                    Jika Anda merasa tidak pernah mendaftar pada platform ini, abaikan email ini.
+                </p>
+                <h4>Terima Kasih</h4>
+                <div style="text-align: center; background-color: #0000ff; padding: 10px 0;">
+                    <h1 style="color: white;">Butuh Bantuan?</h1>
+                    <p style="color: white;">Silakan hubungi kami melalui <a style="color: white;" href="mailto:kdak@gmail.com">kdak@gmail.com</a></p>
+                </div>
+            </div>
+            `,
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        res.status(200).json({ message: 'Kunjungan telah selesai.' });
+    } catch (error) {
+        console.error('Error saat menyelesaikan kunjungan:', error);
+        res.status(500).json({ message: 'Gagal menyelesaikan kunjungan.' });
+    }
+};
+
 
 module.exports = {
     registerVisit,
     updateVisit,
+    getAllVisits,
+    rejectVisit,
+    finishVisit,
 };
