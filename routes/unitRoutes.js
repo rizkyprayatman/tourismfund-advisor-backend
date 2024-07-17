@@ -4,6 +4,7 @@ const unitController = require('../controllers/unitController');
 const { authenticateAdmin } = require('../middlewares/authMiddleware');
 
 router.get('/', authenticateAdmin, unitController.getAllUnits);
+router.get('/all', authenticateAdmin, unitController.getAllUnitPagination);
 router.get('/:id', authenticateAdmin, unitController.getUnitById);
 router.post('/', authenticateAdmin, unitController.addUnit);
 router.put('/:id', authenticateAdmin, unitController.updateUnit);
